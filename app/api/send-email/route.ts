@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { sendConfirmationEmail } from "@/utils/sendEmail";
 import mongoose from "mongoose";
 
 // MongoDB Schema and Model
@@ -27,28 +26,24 @@ export async function POST(req: Request) {
     // Create new registration in the database
     const newRegistration = await Registration.create(formData);
 
-    try {
-      // Send confirmation email
-      await sendConfirmationEmail(newRegistration.email, newRegistration.fullName);
+    // 🔹 Skip email if MAILGUN_API_KEY is missing
+    if (process.env.MAILGUN_API_KEY) {
+      try {
+        const { sendConfirmationEmail } = await import("@/utils/sendEmail");
+        await sendConfirmationEmail(newRegistration.email, newRegistration.fullName);
 
-      // Update registration record to indicate email is sent
-      await Registration.findByIdAndUpdate(newRegistration._id, { emailSent: true });
-
-      return NextResponse.json(
-        { message: "Registration successful", data: newRegistration },
-        { status: 201 }
-      );
-    } catch (emailError: any) {
-      console.error("Email failed:", emailError);
-      return NextResponse.json(
-        {
-          message:
-            "Registration successful but confirmation email failed. Please contact hello@isfnetwork.org",
-          data: newRegistration,
-        },
-        { status: 201 }
-      );
+        await Registration.findByIdAndUpdate(newRegistration._id, { emailSent: true });
+      } catch (emailError: any) {
+        console.error("Email failed:", emailError);
+      }
+    } else {
+      console.warn("MAILGUN_API_KEY not set – skipping email");
     }
+
+    return NextResponse.json(
+      { message: "Registration successful", data: newRegistration },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("Registration error:", error);
     return NextResponse.json(
